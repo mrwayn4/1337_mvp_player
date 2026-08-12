@@ -37,4 +37,4 @@ export async function initDb() {
   initialized = true;
 }
 
-export default sql;
+export { sql };
