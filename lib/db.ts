@@ -1,5 +1,12 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
 import { players } from './config';
+
+const neonSql = neon(process.env.POSTGRES_URL || process.env.DATABASE_URL || '');
+
+export const sql = async (strings: TemplateStringsArray, ...values: any[]) => {
+  const rows = await neonSql(strings, ...values);
+  return { rows };
+};
 
 let initialized = false;
 
@@ -38,8 +45,5 @@ export async function initDb() {
     initialized = true;
   } catch (error) {
     console.error("FATAL ERROR IN initDb:", error);
-    // Don't crash the entire page if possible, though queries might fail later
   }
 }
-
-export { sql };
