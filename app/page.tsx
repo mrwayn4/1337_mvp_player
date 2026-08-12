@@ -23,7 +23,7 @@ export default async function Home() {
     SELECT p.player_id, p.score AS organizer_score, COUNT(v.id)::int AS fan_votes 
     FROM organizer_scores p 
     LEFT JOIN votes v ON v.player_id=p.player_id 
-    GROUP BY p.player_id
+    GROUP BY p.player_id, p.score
   `;
 
   const totalFanVotes = playerRows.reduce((sum, row) => sum + Number(row.fan_votes), 0);
