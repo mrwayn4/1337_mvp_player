@@ -1,0 +1,1 @@
+import {NextResponse} from 'next/server';import {destroySession} from '../../../../lib/session';export async function GET(){destroySession();return NextResponse.redirect(new URL('/',process.env.FORTYTWO_REDIRECT_URI||'http://localhost:3000'))}

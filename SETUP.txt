@@ -1,0 +1,10 @@
+1) Create/copy .env.local from .env.example.
+2) In your 42 app settings set Redirect URI to:
+   http://localhost:3000/api/auth/42/callback
+3) Put your Client ID and Client Secret in .env.local.
+4) Put your own 42 login in ADMIN_LOGINS.
+5) npm install
+6) npm run dev
+7) Open http://localhost:3000
+8) Log in with 42, select one candidate, confirm once.
+9) Organizer logs in with an allowed 42 login and opens /admin.
