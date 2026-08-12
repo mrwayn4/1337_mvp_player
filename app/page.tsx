@@ -1,57 +1,62 @@
 import { players, goalkeepers } from '../lib/config';
 import { getSession } from '../lib/session';
-import db from '../lib/db';
+import { sql, initDb } from '../lib/db';
 import VoteTabs from '../components/VoteTabs';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
+  await initDb();
   const session = await getSession();
 
-  const existingMvp = session
-    ? (db
-        .prepare('SELECT player_id FROM votes WHERE user_id=? AND category=?')
-        .get(session.id, 'mvp') as { player_id: string } | undefined)
-    : undefined;
+  const existingMvpRows = session
+    ? await sql`SELECT player_id FROM votes WHERE user_id=${session.id} AND category='mvp'`
+    : { rows: [] };
+  const existingMvp = existingMvpRows.rows[0] as { player_id: string } | undefined;
 
-  const existingGoalkeeper = session
-    ? (db
-        .prepare('SELECT player_id FROM votes WHERE user_id=? AND category=?')
-        .get(session.id, 'goalkeeper') as { player_id: string } | undefined)
-    : undefined;
+  const existingGoalkeeperRows = session
+    ? await sql`SELECT player_id FROM votes WHERE user_id=${session.id} AND category='goalkeeper'`
+    : { rows: [] };
+  const existingGoalkeeper = existingGoalkeeperRows.rows[0] as { player_id: string } | undefined;
 
-  const playerRows = db
-    .prepare(
-      'SELECT p.player_id,p.score AS organizer_score,COUNT(v.id) AS fan_votes FROM organizer_scores p LEFT JOIN votes v ON v.player_id=p.player_id GROUP BY p.player_id'
-    )
-    .all() as any[];
+  const { rows: playerRows } = await sql`
+    SELECT p.player_id, p.score AS organizer_score, COUNT(v.id)::int AS fan_votes 
+    FROM organizer_scores p 
+    LEFT JOIN votes v ON v.player_id=p.player_id 
+    GROUP BY p.player_id
+  `;
 
-  const totalFanVotes = playerRows.reduce((sum, row) => sum + row.fan_votes, 0);
+  const totalFanVotes = playerRows.reduce((sum, row) => sum + Number(row.fan_votes), 0);
 
   const ranking = players
     .map((player) => {
-      const row = playerRows.find((x) => x.player_id === player.id)!;
-      const fanPercent = totalFanVotes ? (row.fan_votes / totalFanVotes) * 100 : 0;
+      const row = playerRows.find((x) => x.player_id === player.id);
+      const fanVotes = row ? Number(row.fan_votes) : 0;
+      const fanPercent = totalFanVotes ? (fanVotes / totalFanVotes) * 100 : 0;
+      const orgScore = row ? Number(row.organizer_score) : 0;
       return {
         ...player,
-        fanVotes: row.fan_votes,
+        fanVotes: fanVotes,
         fanPercent,
-        organizerScore: row.organizer_score,
-        finalScore: row.organizer_score * 0.6 + fanPercent * 0.4,
+        organizerScore: orgScore,
+        finalScore: orgScore * 0.6 + fanPercent * 0.4,
       };
     })
     .sort((a, b) => b.finalScore - a.finalScore);
 
-  const goalkeeperRows = db
-    .prepare('SELECT player_id, COUNT(id) AS fan_votes FROM votes WHERE category = ? GROUP BY player_id')
-    .all('goalkeeper') as any[];
+  const { rows: goalkeeperRows } = await sql`
+    SELECT player_id, COUNT(id)::int AS fan_votes 
+    FROM votes 
+    WHERE category = 'goalkeeper' 
+    GROUP BY player_id
+  `;
 
-  const totalGoalkeeperVotes = goalkeeperRows.reduce((sum, row) => sum + row.fan_votes, 0);
+  const totalGoalkeeperVotes = goalkeeperRows.reduce((sum, row) => sum + Number(row.fan_votes), 0);
 
   const goalkeeperRanks = [...goalkeepers]
     .sort((a, b) => {
-      const aVotes = goalkeeperRows.find((x) => x.player_id === a.id)?.fan_votes ?? 0;
-      const bVotes = goalkeeperRows.find((x) => x.player_id === b.id)?.fan_votes ?? 0;
+      const aVotes = Number(goalkeeperRows.find((x) => x.player_id === a.id)?.fan_votes ?? 0);
+      const bVotes = Number(goalkeeperRows.find((x) => x.player_id === b.id)?.fan_votes ?? 0);
       return bVotes - aVotes;
     })
     .map((goalkeeper, index) => [goalkeeper.id, index + 1] as const);
@@ -59,7 +64,7 @@ export default async function Home() {
   const goalkeeperRankMap = Object.fromEntries(goalkeeperRanks);
 
   const goalkeepersWithRank = goalkeepers.map((goalkeeper) => {
-    const votes = goalkeeperRows.find((x) => x.player_id === goalkeeper.id)?.fan_votes ?? 0;
+    const votes = Number(goalkeeperRows.find((x) => x.player_id === goalkeeper.id)?.fan_votes ?? 0);
     return {
       ...goalkeeper,
       fanVotes: votes,

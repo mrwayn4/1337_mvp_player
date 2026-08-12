@@ -1,2 +1,29 @@
-import {NextRequest,NextResponse} from 'next/server';import db from '../../../../lib/db';import {players} from '../../../../lib/config';import {requireAdmin,assertSameOrigin} from '../../../../lib/auth';
-export async function POST(req:NextRequest){try{assertSameOrigin(req);await requireAdmin();const {scores}=await req.json();const update=db.prepare('UPDATE organizer_scores SET score=?,updated_at=? WHERE player_id=?');const tx=db.transaction(()=>{for(const p of players){const n=Number(scores?.[p.id]);if(!Number.isFinite(n)||n<0||n>100)throw new Error(`Score for ${p.name} must be 0–100`);update.run(n,new Date().toISOString(),p.id)}});tx();return NextResponse.json({ok:true})}catch(e:any){if(e?.message==='UNAUTHORIZED')return NextResponse.json({error:'Login required'},{status:401});if(e?.message==='FORBIDDEN')return NextResponse.json({error:'Organizer access required'},{status:403});if(e?.message==='BAD_ORIGIN')return NextResponse.json({error:'Invalid origin'},{status:403});return NextResponse.json({error:e?.message||'Could not save scores'},{status:400})}}
+import {NextRequest,NextResponse} from 'next/server';
+import { sql, initDb } from '../../../../lib/db';
+import {players} from '../../../../lib/config';
+import {requireAdmin,assertSameOrigin} from '../../../../lib/auth';
+
+export async function POST(req:NextRequest) {
+  try {
+    assertSameOrigin(req);
+    await requireAdmin();
+    await initDb();
+    
+    const {scores} = await req.json();
+    
+    for (const p of players) {
+      const n = Number(scores?.[p.id]);
+      if (!Number.isFinite(n) || n < 0 || n > 100) {
+        throw new Error(`Score for ${p.name} must be 0–100`);
+      }
+      await sql`UPDATE organizer_scores SET score=${n}, updated_at=${new Date().toISOString()} WHERE player_id=${p.id}`;
+    }
+    
+    return NextResponse.json({ok:true});
+  } catch(e:any) {
+    if(e?.message==='UNAUTHORIZED') return NextResponse.json({error:'Login required'},{status:401});
+    if(e?.message==='FORBIDDEN') return NextResponse.json({error:'Organizer access required'},{status:403});
+    if(e?.message==='BAD_ORIGIN') return NextResponse.json({error:'Invalid origin'},{status:403});
+    return NextResponse.json({error:e?.message||'Could not save scores'},{status:400});
+  }
+}
